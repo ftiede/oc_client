@@ -27,6 +27,8 @@
 #include "filesystem.h"
 #include "version.h"
 #include "accountstate.h"
+#include "account.h"
+#include "capabilities.h"
 
 #include <QDebug>
 #include <QUrl>
@@ -444,6 +446,44 @@ void SocketApi::command_SHARE(const QString& localFile, QIODevice* socket)
 void SocketApi::command_VERSION(const QString&, QIODevice* socket)
 {
     sendMessage(socket, QLatin1String("VERSION:" MIRALL_VERSION_STRING ":" MIRALL_SOCKET_API_VERSION));
+}
+
+void SocketApi::command_SHARE_STATUS(const QString &localFile, QIODevice *socket)
+{
+    if (!socket) {
+        qDebug() << Q_FUNC_INFO << "No valid socket object.";
+        return;
+    }
+
+    qDebug() << Q_FUNC_INFO << localFile;
+
+    Folder *shareFolder = FolderMan::instance()->folderForPath(localFile);
+
+    if (!shareFolder) {
+        const QString message = QLatin1String("SHARE_STATUS:NOP:")+QDir::toNativeSeparators(localFile);
+        sendMessage(socket, message);
+    } else {
+        const Capabilities capabilities = shareFolder->accountState()->account()->capabilities();
+
+        if (!capabilities.shareAPI()) {
+            const QString message = QLatin1String("SHARE_STATUS:DISABLED:")+QDir::toNativeSeparators(localFile);
+            sendMessage(socket, message);
+        } else {
+            const QString message = QLatin1String("SHARE_STATUS:USERGROUP:")+QDir::toNativeSeparators(localFile);
+            sendMessage(socket, message);
+
+            if (capabilities.sharePublicLink()) {
+                const QString message = QLatin1String("SHARE_STATUS:LINK:")+QDir::toNativeSeparators(localFile);
+                sendMessage(socket, message);
+            } else {
+                const QString message = QLatin1String("SHARE_STATUS:NOLINK:")+QDir::toNativeSeparators(localFile);
+                sendMessage(socket, message);
+            }
+        }
+
+        const QString message = QLatin1String("SHARE_STATUS:OK:")+QDir::toNativeSeparators(localFile);
+        sendMessage(socket, message);
+    }
 }
 
 void SocketApi::command_SHARE_MENU_TITLE(const QString &, QIODevice* socket)
